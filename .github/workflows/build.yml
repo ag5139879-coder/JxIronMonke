@@ -26,8 +26,20 @@ jobs:
         mkdir -p out
         cd out
 
-        # Only reference MelonLoader for this minimal test
-        cat > JxIronMonke.csproj << 'EOF'
+        REFS=""
+        for dll in MelonLoader.dll UnityEngine.CoreModule.dll Il2Cppmscorlib.dll UnhollowerBaseLib.dll UnityEngine.PhysicsModule.dll; do
+          if [ -f "../$dll" ]; then
+            name=$(basename "$dll" .dll)
+            echo "Adding: $name"
+            REFS="$REFS
+            <Reference Include=\"$name\">
+              <HintPath>../$dll</HintPath>
+              <Private>false</Private>
+            </Reference>"
+          fi
+        done
+
+        cat > JxIronMonke.csproj << EOF
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
             <TargetFramework>net472</TargetFramework>
@@ -35,16 +47,12 @@ jobs:
             <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
             <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
             <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-            <Deterministic>false</Deterministic>
           </PropertyGroup>
           <ItemGroup>
             <Compile Include="../src/IronMonkeMod.cs" />
           </ItemGroup>
           <ItemGroup>
-            <Reference Include="MelonLoader">
-              <HintPath>../MelonLoader.dll</HintPath>
-              <Private>false</Private>
-            </Reference>
+        $REFS
           </ItemGroup>
         </Project>
         EOF
@@ -54,8 +62,6 @@ jobs:
 
         dotnet build JxIronMonke.csproj -c Release -v n
 
-        echo ""
-        echo "=== Output ==="
         find . -name "JxIronMonke.dll" -type f
 
     - name: Collect

@@ -1,7 +1,7 @@
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.6.0", "Jx")]
+[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.6.1", "Jx")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
@@ -25,7 +25,7 @@ namespace IronMonke
 
         public override void OnApplicationStart()
         {
-            MelonLogger.Msg("JxIronMonke 1.6.0 - big gloves + repulsor + flight");
+            MelonLogger.Msg("JxIronMonke 1.6.1 - big gloves + repulsor + flight");
         }
 
         public override void OnUpdate()
@@ -40,15 +40,10 @@ namespace IronMonke
                 return;
             }
 
-            // Force gloves to match hands every frame
             if (leftHand != null && leftGlove != null)
-            {
                 leftGlove.transform.SetPositionAndRotation(leftHand.position, leftHand.rotation);
-            }
             if (rightHand != null && rightGlove != null)
-            {
                 rightGlove.transform.SetPositionAndRotation(rightHand.position, rightHand.rotation);
-            }
 
             bool leftOn = IsThrusting(leftHand);
             bool rightOn = IsThrusting(rightHand);
@@ -63,26 +58,20 @@ namespace IronMonke
             {
                 if (leftOn) playerRb.AddForce(-leftHand.up * thrustForce, ForceMode.Acceleration);
                 if (rightOn) playerRb.AddForce(-rightHand.up * thrustForce, ForceMode.Acceleration);
-
-                // Extra help if mostly upward
                 if (leftOn || rightOn)
-                {
                     playerRb.AddForce(Vector3.up * 4f, ForceMode.Acceleration);
-                }
             }
         }
 
         private bool IsThrusting(Transform hand)
         {
             if (hand == null) return false;
-            // Palm facing mostly down OR away from body in a "push" pose
-            float down = Mathf.Max(
-                Vector3.Dot(hand.up, Vector3.down),
-                Vector3.Dot(-hand.up, Vector3.down),
-                Vector3.Dot(hand.forward, Vector3.down),
-                Vector3.Dot(-hand.forward, Vector3.down)
-            );
-            return down > 0.25f;
+            float a = Vector3.Dot(hand.up, Vector3.down);
+            float b = Vector3.Dot(-hand.up, Vector3.down);
+            float c = Vector3.Dot(hand.forward, Vector3.down);
+            float d = Vector3.Dot(-hand.forward, Vector3.down);
+            float best = Mathf.Max(Mathf.Max(a, b), Mathf.Max(c, d));
+            return best > 0.25f;
         }
 
         private void UpdateBeam(GameObject beam, Transform hand, bool on)
@@ -91,7 +80,6 @@ namespace IronMonke
             beam.SetActive(on);
             if (!on) return;
 
-            // Beam shoots out of the palm
             beam.transform.position = hand.position + (-hand.up * 0.12f);
             beam.transform.rotation = Quaternion.LookRotation(-hand.up);
             beam.transform.localScale = new Vector3(0.06f, 0.06f, 0.55f);
@@ -115,7 +103,6 @@ namespace IronMonke
             if (player == null) player = GameObject.Find("Player Objects");
             if (player == null) return;
 
-            // Try hard to find a Rigidbody
             playerRb = player.GetComponent<Rigidbody>();
             if (playerRb == null) playerRb = player.GetComponentInChildren<Rigidbody>();
             if (playerRb == null) playerRb = player.GetComponentInParent<Rigidbody>();
@@ -188,7 +175,6 @@ namespace IronMonke
             Color dark = new Color(0.3f, 0.05f, 0.05f);
             Color gold = new Color(1f, 0.82f, 0.1f);
 
-            // MUCH bigger pieces so they are obvious in VR
             MakePart(root.transform, "Palm", PrimitiveType.Cube,
                 new Vector3(0f, 0f, 0.04f), Quaternion.identity,
                 new Vector3(0.14f, 0.04f, 0.16f), red);
@@ -205,7 +191,6 @@ namespace IronMonke
                 new Vector3(0f, -0.03f, 0.04f), Quaternion.Euler(90f, 0f, 0f),
                 new Vector3(0.1f, 0.015f, 0.1f), gold);
 
-            // Finger stubs
             float[] xs = { -0.045f, -0.015f, 0.015f, 0.045f };
             for (int i = 0; i < 4; i++)
             {
@@ -219,7 +204,6 @@ namespace IronMonke
 
         private GameObject BuildBeam(string name)
         {
-            // Orange repulsor cone / beam
             GameObject beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             beam.name = name;
             beam.transform.localScale = new Vector3(0.06f, 0.06f, 0.55f);
@@ -229,9 +213,7 @@ namespace IronMonke
 
             Renderer r = beam.GetComponent<Renderer>();
             if (r != null)
-            {
                 r.material.color = new Color(1f, 0.45f, 0.05f, 0.9f);
-            }
 
             beam.SetActive(false);
             return beam;

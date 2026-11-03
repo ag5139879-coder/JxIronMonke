@@ -1,7 +1,7 @@
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.4.0", "Jx")]
+[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.5.0", "Jx")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
@@ -15,19 +15,68 @@ namespace IronMonke
         private bool glovesCreated;
         private float nextSearchTime;
 
+        // Flight
+        private Rigidbody playerRb;
+        private float thrustForce = 18f;
+
         public override void OnApplicationStart()
         {
-            MelonLogger.Msg("JxIronMonke 1.4.0 - better gloves");
+            MelonLogger.Msg("JxIronMonke 1.5.0 - better gloves + flight");
         }
 
         public override void OnUpdate()
         {
-            if (glovesCreated) return;
+            if (!glovesCreated)
+            {
+                if (Time.time >= nextSearchTime)
+                {
+                    nextSearchTime = Time.time + 1.5f;
+                    TryFindHandsAndCreateGloves();
+                }
+                return;
+            }
 
-            if (Time.time < nextSearchTime) return;
-            nextSearchTime = Time.time + 2f;
+            // Keep gloves locked to hands every frame (fixes rotation issues)
+            SyncGlove(leftGlove, leftHand);
+            SyncGlove(rightGlove, rightHand);
 
-            TryFindHandsAndCreateGloves();
+            // Simple thruster flight: hold grip / trigger style via joystick buttons as placeholder
+            // Real Quest controllers often map to these; we also accept mouse for testing
+            bool leftThrust = Input.GetKey(KeyCode.JoystickButton4) || Input.GetKey(KeyCode.JoystickButton10) || Input.GetKey(KeyCode.Q);
+            bool rightThrust = Input.GetKey(KeyCode.JoystickButton5) || Input.GetKey(KeyCode.JoystickButton11) || Input.GetKey(KeyCode.E);
+
+            ApplyThrust(leftHand, leftThrust);
+            ApplyThrust(rightHand, rightThrust);
+
+            // Brighten thruster pads while thrusting
+            SetThrusterGlow(leftGlove, leftThrust);
+            SetThrusterGlow(rightGlove, rightThrust);
+        }
+
+        private void SyncGlove(GameObject glove, Transform hand)
+        {
+            if (glove == null || hand == null) return;
+            glove.transform.position = hand.position;
+            glove.transform.rotation = hand.rotation;
+        }
+
+        private void ApplyThrust(Transform hand, bool active)
+        {
+            if (!active || hand == null || playerRb == null) return;
+
+            // Push player opposite to palm direction (hand.forward or -up depending on orientation)
+            Vector3 dir = -hand.up; // palm facing direction works well for many rigs
+            playerRb.AddForce(dir * thrustForce, ForceMode.Acceleration);
+        }
+
+        private void SetThrusterGlow(GameObject glove, bool active)
+        {
+            if (glove == null) return;
+            Transform pad = glove.transform.Find("ThrusterPad");
+            if (pad == null) return;
+            Renderer r = pad.GetComponent<Renderer>();
+            if (r == null) return;
+            r.material.color = active ? new Color(1f, 0.95f, 0.35f) : new Color(1f, 0.75f, 0.1f);
         }
 
         private void TryFindHandsAndCreateGloves()
@@ -37,6 +86,11 @@ namespace IronMonke
             if (player == null) player = GameObject.Find("GorillaPlayer");
             if (player == null) player = GameObject.Find("Player Objects");
             if (player == null) return;
+
+            // Rigidbody for flight
+            playerRb = player.GetComponent<Rigidbody>();
+            if (playerRb == null) playerRb = player.GetComponentInChildren<Rigidbody>();
+            if (playerRb == null) playerRb = player.GetComponentInParent<Rigidbody>();
 
             leftHand = FindChildRecursive(player.transform, "LeftHand");
             if (leftHand == null) leftHand = FindChildRecursive(player.transform, "hand_left");
@@ -50,11 +104,10 @@ namespace IronMonke
 
             if (leftHand == null || rightHand == null) return;
 
-            MelonLogger.Msg("Creating improved gloves...");
-            leftGlove = CreateGlove("LeftIronGlove", leftHand, true);
-            rightGlove = CreateGlove("RightIronGlove", rightHand, false);
+            leftGlove = CreateGlove("LeftIronGlove", leftHand);
+            rightGlove = CreateGlove("RightIronGlove", rightHand);
             glovesCreated = true;
-            MelonLogger.Msg("Improved gloves created!");
+            MelonLogger.Msg("Gloves + flight ready. RB=" + (playerRb != null));
         }
 
         private Transform FindChildRecursive(Transform parent, string name)
@@ -70,110 +123,63 @@ namespace IronMonke
             return null;
         }
 
-        private GameObject CreateGlove(string name, Transform parent, bool isLeft)
+        private GameObject CreateGlove(string name, Transform hand)
         {
-            // Root
             GameObject root = new GameObject(name);
-            root.transform.SetParent(parent, false);
-            root.transform.localPosition = Vector3.zero;
-            root.transform.localRotation = Quaternion.identity;
-            root.transform.localScale = Vector3.one;
+            // Don't parent — we sync every frame so rotation always matches
+            root.transform.position = hand.position;
+            root.transform.rotation = hand.rotation;
 
-            Color armorRed = new Color(0.75f, 0.08f, 0.08f);
-            Color darkRed = new Color(0.35f, 0.05f, 0.05f);
-            Color gold = new Color(1f, 0.85f, 0.15f);
-            Color brightGold = new Color(1f, 0.95f, 0.4f);
+            Color red = new Color(0.8f, 0.1f, 0.1f);
+            Color dark = new Color(0.25f, 0.05f, 0.05f);
+            Color gold = new Color(1f, 0.8f, 0.12f);
 
-            // === Palm plate ===
-            GameObject palm = MakePart(root.transform, "Palm", PrimitiveType.Cube,
-                new Vector3(0f, 0f, 0.02f),
+            // Slim palm plate
+            MakePart(root.transform, "Palm", PrimitiveType.Cube,
+                new Vector3(0f, 0f, 0.03f),
                 Quaternion.identity,
-                new Vector3(0.095f, 0.04f, 0.11f),
-                armorRed);
+                new Vector3(0.07f, 0.02f, 0.09f),
+                red);
 
-            // === Back of hand (slightly raised) ===
-            MakePart(root.transform, "BackPlate", PrimitiveType.Cube,
-                new Vector3(0f, 0.025f, 0.01f),
+            // Thin back plate
+            MakePart(root.transform, "Back", PrimitiveType.Cube,
+                new Vector3(0f, 0.018f, 0.02f),
                 Quaternion.identity,
-                new Vector3(0.085f, 0.025f, 0.09f),
-                darkRed);
+                new Vector3(0.065f, 0.015f, 0.07f),
+                dark);
 
-            // === Wrist / cuff ===
+            // Wrist band
             MakePart(root.transform, "Wrist", PrimitiveType.Cube,
-                new Vector3(0f, 0f, -0.07f),
+                new Vector3(0f, 0f, -0.04f),
                 Quaternion.identity,
-                new Vector3(0.08f, 0.055f, 0.05f),
-                armorRed);
+                new Vector3(0.06f, 0.035f, 0.035f),
+                red);
 
-            // Gold ring on wrist
-            MakePart(root.transform, "WristRing", PrimitiveType.Cylinder,
-                new Vector3(0f, 0f, -0.05f),
+            // Gold thruster on palm (faces outward along -Y of hand)
+            MakePart(root.transform, "ThrusterPad", PrimitiveType.Cylinder,
+                new Vector3(0f, -0.018f, 0.03f),
                 Quaternion.Euler(90f, 0f, 0f),
-                new Vector3(0.09f, 0.015f, 0.09f),
+                new Vector3(0.05f, 0.008f, 0.05f),
                 gold);
-
-            // === Knuckle plate ===
-            MakePart(root.transform, "Knuckles", PrimitiveType.Cube,
-                new Vector3(0f, 0.02f, 0.07f),
-                Quaternion.identity,
-                new Vector3(0.09f, 0.03f, 0.04f),
-                darkRed);
-
-            // === Main thruster pad (palm) - bright and visible ===
-            GameObject thruster = MakePart(root.transform, "ThrusterPad", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.028f, 0.025f),
-                Quaternion.Euler(90f, 0f, 0f),
-                new Vector3(0.07f, 0.012f, 0.07f),
-                brightGold);
-
-            // Inner glow of thruster
-            MakePart(thruster.transform, "ThrusterCore", PrimitiveType.Cylinder,
-                new Vector3(0f, 0f, 0f),
-                Quaternion.identity,
-                new Vector3(0.55f, 1.2f, 0.55f),
-                new Color(1f, 1f, 0.6f));
-
-            // === Small finger armor pieces ===
-            float[] fingerX = { -0.032f, -0.011f, 0.011f, 0.032f };
-            for (int i = 0; i < 4; i++)
-            {
-                MakePart(root.transform, "Finger" + i, PrimitiveType.Cube,
-                    new Vector3(fingerX[i], 0.01f, 0.095f),
-                    Quaternion.identity,
-                    new Vector3(0.018f, 0.025f, 0.045f),
-                    armorRed);
-            }
-
-            // Thumb
-            float thumbSide = isLeft ? 0.05f : -0.05f;
-            MakePart(root.transform, "Thumb", PrimitiveType.Cube,
-                new Vector3(thumbSide, 0f, 0.03f),
-                Quaternion.Euler(0f, 0f, isLeft ? -35f : 35f),
-                new Vector3(0.025f, 0.03f, 0.05f),
-                armorRed);
 
             return root;
         }
 
-        private GameObject MakePart(Transform parent, string name, PrimitiveType type,
-            Vector3 localPos, Quaternion localRot, Vector3 localScale, Color color)
+        private GameObject MakePart(Transform parent, string partName, PrimitiveType type,
+            Vector3 pos, Quaternion rot, Vector3 scale, Color color)
         {
             GameObject go = GameObject.CreatePrimitive(type);
-            go.name = name;
+            go.name = partName;
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = localPos;
-            go.transform.localRotation = localRot;
-            go.transform.localScale = localScale;
+            go.transform.localPosition = pos;
+            go.transform.localRotation = rot;
+            go.transform.localScale = scale;
 
-            // Remove collider so it doesn't push things
-            Collider col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            Collider c = go.GetComponent<Collider>();
+            if (c != null) Object.Destroy(c);
 
-            Renderer rend = go.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                rend.material.color = color;
-            }
+            Renderer r = go.GetComponent<Renderer>();
+            if (r != null) r.material.color = color;
 
             return go;
         }

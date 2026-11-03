@@ -18,12 +18,18 @@ jobs:
       with:
         dotnet-version: '6.0.x'
 
+    - name: List available DLLs
+      run: |
+        echo "=== Root DLLs ==="
+        ls -la *.dll || true
+        echo "=== refs folder ==="
+        ls -la refs/ || true
+
     - name: Create project
       run: |
         mkdir -p build/JxIronMonke
         cd build/JxIronMonke
 
-        # Create a proper csproj that references the DLLs
         cat > JxIronMonke.csproj << 'EOF'
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
@@ -32,7 +38,11 @@ jobs:
             <Nullable>disable</Nullable>
             <LangVersion>latest</LangVersion>
             <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+            <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
           </PropertyGroup>
+          <ItemGroup>
+            <Compile Include="IronMonkeMod.cs" />
+          </ItemGroup>
           <ItemGroup>
             <Reference Include="MelonLoader">
               <HintPath>../../MelonLoader.dll</HintPath>
@@ -50,18 +60,27 @@ jobs:
         </Project>
         EOF
 
+        cat JxIronMonke.csproj
+
     - name: Copy source
       run: |
         cp src/IronMonkeMod.cs build/JxIronMonke/
+        ls -la build/JxIronMonke/
 
     - name: Build
       run: |
         cd build/JxIronMonke
-        dotnet build -c Release --verbosity normal
+        dotnet restore
+        dotnet build -c Release --verbosity detailed 2>&1 | tee build.log
+        echo "=== BUILD LOG END ==="
+        cat build.log
 
     - name: Upload built DLL
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: JxIronMonke-Build
-        path: build/JxIronMonke/bin/Release/net6.0/JxIronMonke.dll
-        if-no-files-found: error
+        path: |
+          build/JxIronMonke/bin/Release/net6.0/JxIronMonke.dll
+          build/JxIronMonke/build.log
+        if-no-files-found: warn

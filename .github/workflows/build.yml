@@ -19,21 +19,22 @@ jobs:
     - name: List DLLs
       run: |
         echo "=== All DLLs in repo ==="
-        find . -name "*.dll" -type f
+        find . -maxdepth 1 -name "*.dll" -type f
 
     - name: Build
       run: |
         mkdir -p out
         cd out
 
-        # Build list of references dynamically
+        # Dynamically add EVERY .dll in the repo root as a reference
         REFS=""
-        for dll in MelonLoader.dll UnityEngine.CoreModule.dll UnityEngine.UI.dll Il2Cppmscorlib.dll UnityEngine.PhysicsModule.dll UnityEngine.TextRenderingModule.dll UnityEngine.UIModule.dll; do
-          if [ -f "../$dll" ]; then
-            echo "Found $dll"
+        for dll in ../*.dll; do
+          if [ -f "$dll" ]; then
+            name=$(basename "$dll" .dll)
+            echo "Adding reference: $name"
             REFS="$REFS
-            <Reference Include=\"${dll%.*}\">
-              <HintPath>../$dll</HintPath>
+            <Reference Include=\"$name\">
+              <HintPath>$dll</HintPath>
               <Private>false</Private>
             </Reference>"
           fi

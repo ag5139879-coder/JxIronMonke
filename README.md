@@ -3,33 +3,41 @@
 Iron Man style thruster / flight mod for **com.JxStudios.Jxmoddinggame** (Quest + MelonLoader).
 
 ## Current Status
-- Base: Existing `IronMonke.dll` (MelonLoader port with red/black gloves + orange thrusters)
-- Goal: Better suit/glove visuals + HUD + rockets
+- Base flight/thrusters from original IronMonke
+- **New**: Procedural improved gloves (red + glowing yellow thruster pads)
+- **New**: World-space HUD (Speed / Thruster status / Energy)
 
-## Planned Features
-- [x] Basic hand thrusters (existing)
-- [ ] Improved glove / partial suit visuals
-- [ ] World-space HUD (speed, thruster status, etc.)
-- [ ] Rockets + simple lock-on (later)
+## Features
+- [x] Basic hand thrusters
+- [x] Improved glove visuals (procedural for now)
+- [x] World-space HUD
+- [ ] Real 3D glove/suit models (replace procedural ones)
+- [ ] Rockets + lock-on (next)
 
 ## Structure
 ```
 /
-├── Plugins/          # Built .dll goes here
-├── src/              # C# source code
-├── Assets/           # Models, materials, textures for better gloves/suit
+├── src/
+│   └── IronMonkeMod.cs     ← Main mod code (gloves + HUD)
+├── Plugins/                ← Put built .dll here
+├── Assets/                 ← Future real models/textures
+├── BUILD.md                ← How to build & test
 └── README.md
 ```
 
-## Requirements
-- Quest
-- MelonLoader (compatible with the game)
-- Game: com.JxStudios.Jxmoddinggame
+## Quick Start
+1. Read `BUILD.md`
+2. Build the mod from `src/IronMonkeMod.cs`
+3. Place the DLL in the game’s MelonLoader Mods folder
+4. Test on Quest
 
-## Development Notes
-This is a Quest (Android / IL2CPP) MelonLoader mod.  
-Focus first on improved glove visuals + simple HUD before adding rockets.
+**Important**: You will probably need to update the hand/head transform names inside `FindPlayerTransforms()` to match the exact names used by Jxmoddinggame.
+
+## Next Steps
+- Replace the simple cube gloves with real low-poly models
+- Hook the real thruster input from the original mod
+- Add rockets
 
 ## Credits
-- Original IronMonke concept / MelonLoader port by buzzbb
+- Original IronMonke / MelonLoader port by buzzbb
 - Extended for Jxmoddinggame

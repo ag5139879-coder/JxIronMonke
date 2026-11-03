@@ -3,7 +3,7 @@ name: Build JxIronMonke
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allows manual run from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,41 +20,48 @@ jobs:
 
     - name: Create project
       run: |
-        mkdir -p build
-        cd build
-        dotnet new classlib -n JxIronMonke -f net6.0 --force
-        rm JxIronMonke/Class1.cs
+        mkdir -p build/JxIronMonke
+        cd build/JxIronMonke
+
+        # Create a proper csproj that references the DLLs
+        cat > JxIronMonke.csproj << 'EOF'
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <TargetFramework>net6.0</TargetFramework>
+            <ImplicitUsings>disable</ImplicitUsings>
+            <Nullable>disable</Nullable>
+            <LangVersion>latest</LangVersion>
+            <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+          </PropertyGroup>
+          <ItemGroup>
+            <Reference Include="MelonLoader">
+              <HintPath>../../MelonLoader.dll</HintPath>
+              <Private>false</Private>
+            </Reference>
+            <Reference Include="UnityEngine.CoreModule">
+              <HintPath>../../UnityEngine.CoreModule.dll</HintPath>
+              <Private>false</Private>
+            </Reference>
+            <Reference Include="UnityEngine.UI">
+              <HintPath>../../UnityEngine.UI.dll</HintPath>
+              <Private>false</Private>
+            </Reference>
+          </ItemGroup>
+        </Project>
+        EOF
 
     - name: Copy source
       run: |
         cp src/IronMonkeMod.cs build/JxIronMonke/
 
-    - name: Add MelonLoader reference (placeholder)
-      run: |
-        cd build/JxIronMonke
-        # We expect the user to upload MelonLoader.dll and Unity DLLs into a 'refs' folder
-        if [ -d "../../refs" ]; then
-          echo "Found refs folder"
-          ls ../../refs
-        else
-          echo "No refs folder found - build may fail without MelonLoader.dll"
-        fi
-
     - name: Build
       run: |
         cd build/JxIronMonke
-        # Try to reference any DLLs the user uploaded to /refs
-        if [ -d "../../refs" ]; then
-          for dll in ../../refs/*.dll; do
-            echo "Adding reference: $dll"
-            dotnet add reference "$dll" || true
-          done
-        fi
-        dotnet build -c Release
+        dotnet build -c Release --verbosity normal
 
     - name: Upload built DLL
       uses: actions/upload-artifact@v4
       with:
         name: JxIronMonke-Build
         path: build/JxIronMonke/bin/Release/net6.0/JxIronMonke.dll
-        if-no-files-found: warn
+        if-no-files-found: error

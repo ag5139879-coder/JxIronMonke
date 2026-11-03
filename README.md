@@ -1,43 +1,53 @@
 # JxIronMonke
 
-Iron Man style thruster / flight mod for **com.JxStudios.Jxmoddinggame** (Quest + MelonLoader).
+Iron Man style thruster / flight mod for **com.JxStudios.Jxmoddinggame** (Quest + MelonLoader / LemonLoader).
 
-## Current Status
-- Base flight/thrusters from original IronMonke
-- **New**: Procedural improved gloves (red + glowing yellow thruster pads)
-- **New**: World-space HUD (Speed / Thruster status / Energy)
+## Current Features
+- Procedural improved gloves (red + glowing yellow thruster pads)
+- World-space HUD (Speed / Thruster status / Energy)
 
-## Features
-- [x] Basic hand thrusters
-- [x] Improved glove visuals (procedural for now)
-- [x] World-space HUD
-- [ ] Real 3D glove/suit models (replace procedural ones)
-- [ ] Rockets + lock-on (next)
+## How to Build (Standalone Quest – Recommended)
 
-## Structure
+You do **not** need Visual Studio. Just use GitHub Actions:
+
+### Step 1 – Upload the required DLLs
+1. Go to the `refs` folder in this repository
+2. Upload these files:
+   - **MelonLoader.dll** (required)
+   - `UnityEngine.CoreModule.dll`
+   - `UnityEngine.UI.dll`
+   - Any other UnityEngine.*.dll the game needs
+
+### Step 2 – Run the build
+1. Go to the **Actions** tab
+2. Click **Build JxIronMonke**
+3. Click **Run workflow** → **Run workflow**
+4. Wait for it to finish
+5. Download the artifact called `JxIronMonke-Build`
+6. Inside you will find `JxIronMonke.dll`
+
+### Step 3 – Install on Quest
+Place the DLL here:
+```
+Android/data/com.JxStudios.Jxmoddinggame/files/Mods/
+```
+
+Then fully close and reopen the game.
+
+## Project Structure
 ```
 /
-├── src/
-│   └── IronMonkeMod.cs     ← Main mod code (gloves + HUD)
-├── Plugins/                ← Put built .dll here
-├── Assets/                 ← Future real models/textures
-├── BUILD.md                ← How to build & test
-└── README.md
+├── src/IronMonkeMod.cs     ← Source code
+├── refs/                   ← Upload MelonLoader + Unity DLLs here
+├── .github/workflows/      ← Auto-build system
+├── Plugins/                ← Final built DLLs
+└── Assets/                 ← Future models
 ```
 
-## Quick Start
-1. Read `BUILD.md`
-2. Build the mod from `src/IronMonkeMod.cs`
-3. Place the DLL in the game’s MelonLoader Mods folder
-4. Test on Quest
-
-**Important**: You will probably need to update the hand/head transform names inside `FindPlayerTransforms()` to match the exact names used by Jxmoddinggame.
-
-## Next Steps
-- Replace the simple cube gloves with real low-poly models
-- Hook the real thruster input from the original mod
-- Add rockets
+## Notes
+- Hand / Head transform names may need adjusting for Jxmoddinggame
+- Check MelonLoader logs if the gloves or HUD do not appear
 
 ## Credits
-- Original IronMonke / MelonLoader port by buzzbb
+- Original IronMonke concept by buzzbb
 - Extended for Jxmoddinggame

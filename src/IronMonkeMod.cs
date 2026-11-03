@@ -1,7 +1,7 @@
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.7.0", "Jx")]
+[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.8.0", "Jx")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
@@ -20,11 +20,18 @@ namespace IronMonke
         private float nextSearch;
 
         private Rigidbody body;
-        private const float THRUST = 22f;
+        private const float THRUST = 24f;
+
+        // IronMonke colors
+        private static readonly Color ArmorRed = new Color(0.78f, 0.08f, 0.08f);
+        private static readonly Color ArmorBlack = new Color(0.08f, 0.08f, 0.1f);
+        private static readonly Color Gold = new Color(1f, 0.82f, 0.12f);
+        private static readonly Color GoldHot = new Color(1f, 0.95f, 0.35f);
+        private static readonly Color RepulsorOrange = new Color(1f, 0.4f, 0.05f);
 
         public override void OnApplicationStart()
         {
-            MelonLogger.Msg("JxIronMonke 1.7.0 - hand sized gloves + repulsor + flight");
+            MelonLogger.Msg("JxIronMonke 1.8.0 - IronMonke style gloves");
         }
 
         public override void OnUpdate()
@@ -37,7 +44,6 @@ namespace IronMonke
                 return;
             }
 
-            // Parenting keeps rotation correct - do not fight it with SetPositionAndRotation
             bool L = PalmThrust(leftHand);
             bool R = PalmThrust(rightHand);
 
@@ -56,7 +62,6 @@ namespace IronMonke
         private bool PalmThrust(Transform hand)
         {
             if (hand == null) return false;
-            // Active when palm roughly aims down
             float d1 = Vector3.Dot(hand.up, Vector3.down);
             float d2 = Vector3.Dot(-hand.up, Vector3.down);
             return Mathf.Max(d1, d2) > 0.35f;
@@ -71,11 +76,11 @@ namespace IronMonke
                 return;
             }
             beam.SetActive(true);
-            // Cylinder default axis is Y - aim -hand.up
             Vector3 dir = -hand.up;
-            beam.transform.position = hand.position + dir * 0.08f;
+            beam.transform.position = hand.position + dir * 0.06f;
             beam.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir);
-            beam.transform.localScale = new Vector3(0.035f, 0.18f, 0.035f);
+            // Short wide cone look (IronMonke repulsor)
+            beam.transform.localScale = new Vector3(0.05f, 0.14f, 0.05f);
         }
 
         private void Glow(GameObject glove, bool on)
@@ -85,7 +90,7 @@ namespace IronMonke
             if (pad == null) return;
             Renderer r = pad.GetComponent<Renderer>();
             if (r == null) return;
-            r.material.color = on ? new Color(1f, 0.95f, 0.3f) : new Color(1f, 0.75f, 0.1f);
+            r.material.color = on ? GoldHot : Gold;
         }
 
         private void TryInit()
@@ -118,7 +123,7 @@ namespace IronMonke
             rightBeam = MakeBeam("RBeam");
 
             ready = true;
-            MelonLogger.Msg("Ready. hands=" + leftHand.name + "/" + rightHand.name + " body=" + (body != null));
+            MelonLogger.Msg("IronMonke gloves ready on " + leftHand.name + " / " + rightHand.name);
         }
 
         private Transform Find(Transform root, string name)
@@ -135,29 +140,41 @@ namespace IronMonke
 
         private GameObject MakeGlove(string name, Transform hand)
         {
-            // PARENT to hand so rotation is always correct (same as first working version)
             GameObject root = new GameObject(name);
             root.transform.SetParent(hand, false);
             root.transform.localPosition = Vector3.zero;
             root.transform.localRotation = Quaternion.identity;
             root.transform.localScale = Vector3.one;
 
-            Color red = new Color(0.82f, 0.12f, 0.12f);
-            Color gold = new Color(1f, 0.8f, 0.12f);
-
-            // Hand-sized palm (close to the first cube size that looked ok)
+            // Main red palm shell (Iron Man gauntlet)
             Part(root.transform, "Palm", PrimitiveType.Cube,
                 new Vector3(0f, 0f, 0.02f), Quaternion.identity,
-                new Vector3(0.09f, 0.035f, 0.11f), red);
+                new Vector3(0.095f, 0.04f, 0.115f), ArmorRed);
 
-            Part(root.transform, "Wrist", PrimitiveType.Cube,
-                new Vector3(0f, 0f, -0.05f), Quaternion.identity,
-                new Vector3(0.08f, 0.045f, 0.04f), red);
+            // Black knuckle strip (like original IronMonke yellow/black accents area)
+            Part(root.transform, "Knuckle", PrimitiveType.Cube,
+                new Vector3(0f, 0.022f, 0.05f), Quaternion.identity,
+                new Vector3(0.09f, 0.02f, 0.04f), ArmorBlack);
 
-            // Palm thruster pad
+            // Black wrist band
+            Part(root.transform, "WristBlack", PrimitiveType.Cube,
+                new Vector3(0f, 0f, -0.045f), Quaternion.identity,
+                new Vector3(0.085f, 0.05f, 0.035f), ArmorBlack);
+
+            // Red outer wrist plate
+            Part(root.transform, "WristRed", PrimitiveType.Cube,
+                new Vector3(0f, 0.01f, -0.07f), Quaternion.identity,
+                new Vector3(0.08f, 0.035f, 0.03f), ArmorRed);
+
+            // Gold thruster circle on palm (classic IronMonke)
             Part(root.transform, "Pad", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.022f, 0.02f), Quaternion.Euler(90f, 0f, 0f),
-                new Vector3(0.06f, 0.01f, 0.06f), gold);
+                new Vector3(0f, -0.025f, 0.025f), Quaternion.Euler(90f, 0f, 0f),
+                new Vector3(0.065f, 0.012f, 0.065f), Gold);
+
+            // Small gold rim around pad
+            Part(root.transform, "PadRim", PrimitiveType.Cylinder,
+                new Vector3(0f, -0.022f, 0.025f), Quaternion.Euler(90f, 0f, 0f),
+                new Vector3(0.078f, 0.006f, 0.078f), Gold);
 
             return root;
         }
@@ -169,7 +186,7 @@ namespace IronMonke
             Collider col = b.GetComponent<Collider>();
             if (col != null) Object.Destroy(col);
             Renderer r = b.GetComponent<Renderer>();
-            if (r != null) r.material.color = new Color(1f, 0.4f, 0.05f);
+            if (r != null) r.material.color = RepulsorOrange;
             b.SetActive(false);
             return b;
         }

@@ -10,24 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Setup .NET
+    - name: Setup .NET 6
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.0.x'
 
-    - name: List available DLLs
-      run: |
-        echo "=== Root DLLs ==="
-        ls -la *.dll || true
+    - name: Show files
+      run: ls -la *.dll
 
-    - name: Create project
+    - name: Create project + build
       run: |
-        mkdir -p build/JxIronMonke
-        cd build/JxIronMonke
+        mkdir -p build
+        cd build
 
+        # Create csproj
         cat > JxIronMonke.csproj << 'EOF'
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
@@ -37,55 +36,53 @@ jobs:
             <LangVersion>latest</LangVersion>
             <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
             <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-            <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-            <OutputPath>bin/Release/</OutputPath>
           </PropertyGroup>
           <ItemGroup>
             <Compile Include="IronMonkeMod.cs" />
           </ItemGroup>
           <ItemGroup>
             <Reference Include="MelonLoader">
-              <HintPath>../../MelonLoader.dll</HintPath>
+              <HintPath>../MelonLoader.dll</HintPath>
               <Private>false</Private>
             </Reference>
             <Reference Include="UnityEngine.CoreModule">
-              <HintPath>../../UnityEngine.CoreModule.dll</HintPath>
+              <HintPath>../UnityEngine.CoreModule.dll</HintPath>
               <Private>false</Private>
             </Reference>
             <Reference Include="UnityEngine.UI">
-              <HintPath>../../UnityEngine.UI.dll</HintPath>
+              <HintPath>../UnityEngine.UI.dll</HintPath>
               <Private>false</Private>
             </Reference>
           </ItemGroup>
         </Project>
         EOF
 
-    - name: Copy source
-      run: |
-        cp src/IronMonkeMod.cs build/JxIronMonke/
+        # Copy source
+        cp ../src/IronMonkeMod.cs .
 
-    - name: Build
-      run: |
-        cd build/JxIronMonke
+        # Build
         dotnet build -c Release
-        echo "=== Looking for output ==="
+
+        echo "=== Build finished, searching for DLL ==="
         find . -name "*.dll" -type f
-        ls -laR bin/ || true
 
-    - name: Prepare artifact
+    - name: Copy DLL to known location
       run: |
-        mkdir -p artifact
-        # Copy the built mod DLL (prefer the one we just built)
-        find build -name "JxIronMonke.dll" -type f -exec cp {} artifact/ \;
-        # Fallback: any DLL that isn't a reference
-        if [ ! -f artifact/JxIronMonke.dll ]; then
-          find build -name "*.dll" -type f ! -name "MelonLoader.dll" ! -name "UnityEngine*" -exec cp {} artifact/JxIronMonke.dll \;
+        mkdir -p output
+        # The SDK puts it in bin/Release/net6.0/
+        if [ -f build/bin/Release/net6.0/JxIronMonke.dll ]; then
+          cp build/bin/Release/net6.0/JxIronMonke.dll output/
+          echo "Found DLL in standard location"
+        else
+          # Fallback search
+          find build -name "JxIronMonke.dll" -exec cp {} output/ \;
+          echo "Used fallback search"
         fi
-        ls -la artifact/
+        ls -la output/
 
-    - name: Upload built DLL
+    - name: Upload DLL
       uses: actions/upload-artifact@v4
       with:
         name: JxIronMonke-DLL
-        path: artifact/JxIronMonke.dll
+        path: output/JxIronMonke.dll
         if-no-files-found: error

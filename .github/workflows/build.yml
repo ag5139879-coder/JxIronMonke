@@ -16,26 +16,30 @@ jobs:
       with:
         dotnet-version: '6.0.x'
 
-    - name: Prepare
+    - name: List DLLs
       run: |
-        echo "Files in repo root:"
-        ls -la
-        echo ""
-        echo "Source file exists?"
-        ls -la src/IronMonkeMod.cs
-        echo ""
-        echo "Reference DLLs:"
-        ls -la MelonLoader.dll UnityEngine.CoreModule.dll UnityEngine.UI.dll
+        echo "=== All DLLs in repo ==="
+        find . -name "*.dll" -type f
 
     - name: Build
       run: |
-        # Create a clean folder
-        rm -rf out
-        mkdir out
+        mkdir -p out
         cd out
 
-        # Write the project file with absolute-style relative paths from out/
-        cat > JxIronMonke.csproj << 'EOF'
+        # Build list of references dynamically
+        REFS=""
+        for dll in MelonLoader.dll UnityEngine.CoreModule.dll UnityEngine.UI.dll Il2Cppmscorlib.dll UnityEngine.PhysicsModule.dll UnityEngine.TextRenderingModule.dll UnityEngine.UIModule.dll; do
+          if [ -f "../$dll" ]; then
+            echo "Found $dll"
+            REFS="$REFS
+            <Reference Include=\"${dll%.*}\">
+              <HintPath>../$dll</HintPath>
+              <Private>false</Private>
+            </Reference>"
+          fi
+        done
+
+        cat > JxIronMonke.csproj << EOF
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
             <TargetFramework>net6.0</TargetFramework>
@@ -46,24 +50,11 @@ jobs:
             <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
             <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
           </PropertyGroup>
-
           <ItemGroup>
             <Compile Include="../src/IronMonkeMod.cs" />
           </ItemGroup>
-
           <ItemGroup>
-            <Reference Include="MelonLoader">
-              <HintPath>../MelonLoader.dll</HintPath>
-              <Private>false</Private>
-            </Reference>
-            <Reference Include="UnityEngine.CoreModule">
-              <HintPath>../UnityEngine.CoreModule.dll</HintPath>
-              <Private>false</Private>
-            </Reference>
-            <Reference Include="UnityEngine.UI">
-              <HintPath>../UnityEngine.UI.dll</HintPath>
-              <Private>false</Private>
-            </Reference>
+        $REFS
           </ItemGroup>
         </Project>
         EOF
@@ -72,29 +63,23 @@ jobs:
         cat JxIronMonke.csproj
         echo "=================="
 
-        # Build and capture everything
         dotnet build JxIronMonke.csproj -c Release -v n
 
         echo ""
-        echo "===== Searching for output DLL ====="
-        find . -type f -name "*.dll"
+        echo "=== Output DLLs ==="
+        find . -name "*.dll" -type f
 
-    - name: Collect DLL
+    - name: Collect
       if: always()
       run: |
         mkdir -p artifact
-        # Try common output locations
-        cp out/bin/Release/net6.0/JxIronMonke.dll artifact/ 2>/dev/null || true
-        cp out/bin/Debug/net6.0/JxIronMonke.dll artifact/ 2>/dev/null || true
-        find out -name "JxIronMonke.dll" -exec cp {} artifact/ \; 2>/dev/null || true
-
-        echo "Artifact contents:"
-        ls -la artifact/ || echo "artifact folder empty"
+        find out -name "JxIronMonke.dll" -exec cp {} artifact/ \; || true
+        ls -la artifact/ || true
 
     - name: Upload
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: JxIronMonke-DLL
-        path: artifact/
+        path: artifact/JxIronMonke.dll
         if-no-files-found: warn

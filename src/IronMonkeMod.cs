@@ -1,7 +1,7 @@
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.5.0", "Jx")]
+[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.5.1", "Jx")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
@@ -15,13 +15,15 @@ namespace IronMonke
         private bool glovesCreated;
         private float nextSearchTime;
 
-        // Flight
         private Rigidbody playerRb;
-        private float thrustForce = 18f;
+        private float thrustForce = 16f;
+
+        // Simple toggle: thrust is on when palm faces mostly downward (common Iron Man pose)
+        // Later we can wire real controller grips when we have the right input module
 
         public override void OnApplicationStart()
         {
-            MelonLogger.Msg("JxIronMonke 1.5.0 - better gloves + flight");
+            MelonLogger.Msg("JxIronMonke 1.5.1 - gloves + orientation thrust");
         }
 
         public override void OnUpdate()
@@ -36,21 +38,25 @@ namespace IronMonke
                 return;
             }
 
-            // Keep gloves locked to hands every frame (fixes rotation issues)
             SyncGlove(leftGlove, leftHand);
             SyncGlove(rightGlove, rightHand);
 
-            // Simple thruster flight: hold grip / trigger style via joystick buttons as placeholder
-            // Real Quest controllers often map to these; we also accept mouse for testing
-            bool leftThrust = Input.GetKey(KeyCode.JoystickButton4) || Input.GetKey(KeyCode.JoystickButton10) || Input.GetKey(KeyCode.Q);
-            bool rightThrust = Input.GetKey(KeyCode.JoystickButton5) || Input.GetKey(KeyCode.JoystickButton11) || Input.GetKey(KeyCode.E);
+            bool leftThrust = IsPalmDown(leftHand);
+            bool rightThrust = IsPalmDown(rightHand);
 
             ApplyThrust(leftHand, leftThrust);
             ApplyThrust(rightHand, rightThrust);
 
-            // Brighten thruster pads while thrusting
             SetThrusterGlow(leftGlove, leftThrust);
             SetThrusterGlow(rightGlove, rightThrust);
+        }
+
+        private bool IsPalmDown(Transform hand)
+        {
+            if (hand == null) return false;
+            // Palm roughly facing world down
+            return Vector3.Dot(hand.up, Vector3.down) > 0.4f
+                || Vector3.Dot(-hand.up, Vector3.down) > 0.4f;
         }
 
         private void SyncGlove(GameObject glove, Transform hand)
@@ -63,9 +69,7 @@ namespace IronMonke
         private void ApplyThrust(Transform hand, bool active)
         {
             if (!active || hand == null || playerRb == null) return;
-
-            // Push player opposite to palm direction (hand.forward or -up depending on orientation)
-            Vector3 dir = -hand.up; // palm facing direction works well for many rigs
+            Vector3 dir = -hand.up;
             playerRb.AddForce(dir * thrustForce, ForceMode.Acceleration);
         }
 
@@ -87,7 +91,6 @@ namespace IronMonke
             if (player == null) player = GameObject.Find("Player Objects");
             if (player == null) return;
 
-            // Rigidbody for flight
             playerRb = player.GetComponent<Rigidbody>();
             if (playerRb == null) playerRb = player.GetComponentInChildren<Rigidbody>();
             if (playerRb == null) playerRb = player.GetComponentInParent<Rigidbody>();
@@ -107,7 +110,7 @@ namespace IronMonke
             leftGlove = CreateGlove("LeftIronGlove", leftHand);
             rightGlove = CreateGlove("RightIronGlove", rightHand);
             glovesCreated = true;
-            MelonLogger.Msg("Gloves + flight ready. RB=" + (playerRb != null));
+            MelonLogger.Msg("Gloves ready. Flight RB=" + (playerRb != null));
         }
 
         private Transform FindChildRecursive(Transform parent, string name)
@@ -126,7 +129,6 @@ namespace IronMonke
         private GameObject CreateGlove(string name, Transform hand)
         {
             GameObject root = new GameObject(name);
-            // Don't parent — we sync every frame so rotation always matches
             root.transform.position = hand.position;
             root.transform.rotation = hand.rotation;
 
@@ -134,33 +136,21 @@ namespace IronMonke
             Color dark = new Color(0.25f, 0.05f, 0.05f);
             Color gold = new Color(1f, 0.8f, 0.12f);
 
-            // Slim palm plate
             MakePart(root.transform, "Palm", PrimitiveType.Cube,
-                new Vector3(0f, 0f, 0.03f),
-                Quaternion.identity,
-                new Vector3(0.07f, 0.02f, 0.09f),
-                red);
+                new Vector3(0f, 0f, 0.03f), Quaternion.identity,
+                new Vector3(0.07f, 0.02f, 0.09f), red);
 
-            // Thin back plate
             MakePart(root.transform, "Back", PrimitiveType.Cube,
-                new Vector3(0f, 0.018f, 0.02f),
-                Quaternion.identity,
-                new Vector3(0.065f, 0.015f, 0.07f),
-                dark);
+                new Vector3(0f, 0.018f, 0.02f), Quaternion.identity,
+                new Vector3(0.065f, 0.015f, 0.07f), dark);
 
-            // Wrist band
             MakePart(root.transform, "Wrist", PrimitiveType.Cube,
-                new Vector3(0f, 0f, -0.04f),
-                Quaternion.identity,
-                new Vector3(0.06f, 0.035f, 0.035f),
-                red);
+                new Vector3(0f, 0f, -0.04f), Quaternion.identity,
+                new Vector3(0.06f, 0.035f, 0.035f), red);
 
-            // Gold thruster on palm (faces outward along -Y of hand)
             MakePart(root.transform, "ThrusterPad", PrimitiveType.Cylinder,
-                new Vector3(0f, -0.018f, 0.03f),
-                Quaternion.Euler(90f, 0f, 0f),
-                new Vector3(0.05f, 0.008f, 0.05f),
-                gold);
+                new Vector3(0f, -0.018f, 0.03f), Quaternion.Euler(90f, 0f, 0f),
+                new Vector3(0.05f, 0.008f, 0.05f), gold);
 
             return root;
         }

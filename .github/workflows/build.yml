@@ -22,8 +22,6 @@ jobs:
       run: |
         echo "=== Root DLLs ==="
         ls -la *.dll || true
-        echo "=== refs folder ==="
-        ls -la refs/ || true
 
     - name: Create project
       run: |
@@ -39,6 +37,8 @@ jobs:
             <LangVersion>latest</LangVersion>
             <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
             <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+            <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+            <OutputPath>bin/Release/</OutputPath>
           </PropertyGroup>
           <ItemGroup>
             <Compile Include="IronMonkeMod.cs" />
@@ -60,27 +60,32 @@ jobs:
         </Project>
         EOF
 
-        cat JxIronMonke.csproj
-
     - name: Copy source
       run: |
         cp src/IronMonkeMod.cs build/JxIronMonke/
-        ls -la build/JxIronMonke/
 
     - name: Build
       run: |
         cd build/JxIronMonke
-        dotnet restore
-        dotnet build -c Release --verbosity detailed 2>&1 | tee build.log
-        echo "=== BUILD LOG END ==="
-        cat build.log
+        dotnet build -c Release
+        echo "=== Looking for output ==="
+        find . -name "*.dll" -type f
+        ls -laR bin/ || true
+
+    - name: Prepare artifact
+      run: |
+        mkdir -p artifact
+        # Copy the built mod DLL (prefer the one we just built)
+        find build -name "JxIronMonke.dll" -type f -exec cp {} artifact/ \;
+        # Fallback: any DLL that isn't a reference
+        if [ ! -f artifact/JxIronMonke.dll ]; then
+          find build -name "*.dll" -type f ! -name "MelonLoader.dll" ! -name "UnityEngine*" -exec cp {} artifact/JxIronMonke.dll \;
+        fi
+        ls -la artifact/
 
     - name: Upload built DLL
-      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: JxIronMonke-Build
-        path: |
-          build/JxIronMonke/bin/Release/net6.0/JxIronMonke.dll
-          build/JxIronMonke/build.log
-        if-no-files-found: warn
+        name: JxIronMonke-DLL
+        path: artifact/JxIronMonke.dll
+        if-no-files-found: error

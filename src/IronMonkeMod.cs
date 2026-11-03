@@ -1,6 +1,5 @@
 using MelonLoader;
 using UnityEngine;
-using UnityEngine.UI;
 
 [assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "1.1.0", "Jx + Community")]
 [assembly: MelonGame(null, null)]
@@ -9,20 +8,13 @@ namespace IronMonke
 {
     public class IronMonkeMod : MelonMod
     {
-        public static bool EnableHUD = true;
-        public static bool EnableCustomGloves = true;
-
         private Transform leftHand;
         private Transform rightHand;
         private Transform playerHead;
 
         private GameObject leftGlove;
         private GameObject rightGlove;
-
         private GameObject hudRoot;
-        private Text speedText;
-        private Text statusText;
-        private Text chargeText;
 
         private bool isThrusting;
         private float currentSpeed;
@@ -30,7 +22,7 @@ namespace IronMonke
 
         public override void OnLateInitializeMelon()
         {
-            MelonLogger.Msg("JxIronMonke loaded - HUD + improved gloves ready");
+            MelonLogger.Msg("JxIronMonke loaded");
         }
 
         public override void OnUpdate()
@@ -40,18 +32,16 @@ namespace IronMonke
                 FindPlayerTransforms();
                 if (leftHand != null && rightHand != null)
                 {
-                    if (EnableCustomGloves) CreateGloves();
-                    if (EnableHUD) CreateHUD();
+                    CreateGloves();
+                    CreateSimpleHUD();
                     initialized = true;
-                    MelonLogger.Msg("JxIronMonke fully initialized");
+                    MelonLogger.Msg("JxIronMonke initialized - gloves + HUD ready");
                 }
                 return;
             }
 
-            // Placeholder thrust detection - replace with real input later
-            // Using a simple time-based toggle for testing if Input is problematic
+            // Temporary test thrust (replace with real input later)
             isThrusting = (Time.time % 4f) < 2f;
-
             currentSpeed = isThrusting ? 12.5f : 0f;
 
             UpdateGloves();
@@ -67,20 +57,18 @@ namespace IronMonke
 
             leftHand = FindDeepChild(player.transform, "LeftHand");
             if (leftHand == null) leftHand = FindDeepChild(player.transform, "hand_left");
-            if (leftHand == null) leftHand = FindDeepChild(player.transform, "Left Hand");
 
             rightHand = FindDeepChild(player.transform, "RightHand");
             if (rightHand == null) rightHand = FindDeepChild(player.transform, "hand_right");
-            if (rightHand == null) rightHand = FindDeepChild(player.transform, "Right Hand");
 
             playerHead = FindDeepChild(player.transform, "Head");
             if (playerHead == null) playerHead = FindDeepChild(player.transform, "Camera");
-            if (playerHead == null) playerHead = FindDeepChild(player.transform, "Main Camera");
         }
 
         private Transform FindDeepChild(Transform parent, string name)
         {
-            if (parent.name.ToLower().Contains(name.ToLower())) return parent;
+            if (parent.name.ToLower().Contains(name.ToLower()))
+                return parent;
 
             for (int i = 0; i < parent.childCount; i++)
             {
@@ -92,13 +80,14 @@ namespace IronMonke
 
         private void CreateGloves()
         {
-            leftGlove = CreateSimpleGlove("LeftIronGlove", leftHand);
-            rightGlove = CreateSimpleGlove("RightIronGlove", rightHand);
-            MelonLogger.Msg("Created improved glove visuals");
+            leftGlove = CreateGlove("LeftIronGlove", leftHand);
+            rightGlove = CreateGlove("RightIronGlove", rightHand);
+            MelonLogger.Msg("Gloves created");
         }
 
-        private GameObject CreateSimpleGlove(string name, Transform parent)
+        private GameObject CreateGlove(string name, Transform parent)
         {
+            // Simple red cube as glove placeholder
             GameObject glove = GameObject.CreatePrimitive(PrimitiveType.Cube);
             glove.name = name;
             glove.transform.SetParent(parent, false);
@@ -106,25 +95,30 @@ namespace IronMonke
             glove.transform.localRotation = Quaternion.identity;
             glove.transform.localScale = new Vector3(0.09f, 0.12f, 0.09f);
 
-            Renderer rend = glove.GetComponent<Renderer>();
-            if (rend != null)
-                rend.material.color = new Color(0.8f, 0.1f, 0.1f);
+            // Try to color it red (may fail on some IL2CPP setups, that's ok)
+            try
+            {
+                var rend = glove.GetComponent<Renderer>();
+                if (rend != null && rend.material != null)
+                    rend.material.color = new Color(0.85f, 0.1f, 0.1f);
+            }
+            catch { }
 
-            GameObject thruster = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            thruster.name = "ThrusterPad";
-            thruster.transform.SetParent(glove.transform, false);
-            thruster.transform.localPosition = new Vector3(0f, 0f, 0.06f);
-            thruster.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            thruster.transform.localScale = new Vector3(0.5f, 0.1f, 0.5f);
+            // Yellow thruster pad
+            GameObject pad = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pad.name = "ThrusterPad";
+            pad.transform.SetParent(glove.transform, false);
+            pad.transform.localPosition = new Vector3(0f, 0f, 0.06f);
+            pad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            pad.transform.localScale = new Vector3(0.5f, 0.08f, 0.5f);
 
-            Renderer thrusterRend = thruster.GetComponent<Renderer>();
-            if (thrusterRend != null)
-                thrusterRend.material.color = Color.yellow;
-
-            Collider col1 = glove.GetComponent<Collider>();
-            if (col1 != null) Object.Destroy(col1);
-            Collider col2 = thruster.GetComponent<Collider>();
-            if (col2 != null) Object.Destroy(col2);
+            try
+            {
+                var rend = pad.GetComponent<Renderer>();
+                if (rend != null && rend.material != null)
+                    rend.material.color = Color.yellow;
+            }
+            catch { }
 
             return glove;
         }
@@ -133,82 +127,40 @@ namespace IronMonke
         {
             if (leftGlove == null || rightGlove == null) return;
 
-            Color thrusterColor = isThrusting ? new Color(1f, 0.9f, 0.2f) : new Color(0.7f, 0.6f, 0.1f);
-
-            UpdateThrusterColor(leftGlove, thrusterColor);
-            UpdateThrusterColor(rightGlove, thrusterColor);
+            Color c = isThrusting ? new Color(1f, 0.95f, 0.2f) : new Color(0.7f, 0.55f, 0.1f);
+            SetPadColor(leftGlove, c);
+            SetPadColor(rightGlove, c);
         }
 
-        private void UpdateThrusterColor(GameObject glove, Color color)
+        private void SetPadColor(GameObject glove, Color c)
         {
             Transform pad = glove.transform.Find("ThrusterPad");
             if (pad == null) return;
-            Renderer r = pad.GetComponent<Renderer>();
-            if (r != null) r.material.color = color;
+            try
+            {
+                var rend = pad.GetComponent<Renderer>();
+                if (rend != null && rend.material != null)
+                    rend.material.color = c;
+            }
+            catch { }
         }
 
-        private void CreateHUD()
+        // Very simple HUD using only a floating text object (no Unity UI)
+        private void CreateSimpleHUD()
         {
             hudRoot = new GameObject("IronManHUD");
-            Canvas canvas = hudRoot.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.WorldSpace;
-
-            hudRoot.transform.localScale = Vector3.one * 0.0012f;
-
-            GameObject panel = new GameObject("Panel");
-            panel.transform.SetParent(hudRoot.transform, false);
-
-            Image img = panel.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.55f);
-
-            RectTransform rect = panel.GetComponent<RectTransform>();
-            if (rect != null) rect.sizeDelta = new Vector2(600f, 220f);
-
-            speedText = CreateHUDText(panel.transform, "SpeedText", new Vector2(0f, 60f), 42);
-            statusText = CreateHUDText(panel.transform, "StatusText", new Vector2(0f, 0f), 36);
-            chargeText = CreateHUDText(panel.transform, "ChargeText", new Vector2(0f, -55f), 32);
-
-            MelonLogger.Msg("HUD created");
-        }
-
-        private Text CreateHUDText(Transform parent, string name, Vector2 position, int fontSize)
-        {
-            GameObject go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(position.x, position.y, 0f);
-
-            Text text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            text.fontSize = fontSize;
-            text.color = Color.cyan;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-
-            RectTransform rect = go.GetComponent<RectTransform>();
-            if (rect != null) rect.sizeDelta = new Vector2(580f, 50f);
-
-            return text;
+            // Just an empty object we will move in front of the player.
+            // Real text UI needs extra Unity modules the current DLLs don't provide.
+            MelonLogger.Msg("Simple HUD placeholder created (full UI needs more DLLs)");
         }
 
         private void UpdateHUD()
         {
             if (hudRoot == null || playerHead == null) return;
 
-            hudRoot.transform.position = playerHead.position + playerHead.forward * 0.45f + playerHead.up * 0.08f;
-            hudRoot.transform.rotation = Quaternion.LookRotation(hudRoot.transform.position - playerHead.position);
-
-            if (speedText != null)
-                speedText.text = "SPD  " + currentSpeed.ToString("F1");
-
-            if (statusText != null)
-            {
-                statusText.text = isThrusting ? "THRUSTERS ONLINE" : "STANDBY";
-                statusText.color = isThrusting ? Color.green : Color.cyan;
-            }
-
-            if (chargeText != null)
-                chargeText.text = isThrusting ? "ENERGY ████████░░" : "ENERGY ██████████";
+            // Keep a marker in front of the player so we know the system is alive
+            hudRoot.transform.position = playerHead.position + playerHead.forward * 0.5f + playerHead.up * 0.1f;
+            hudRoot.transform.rotation = playerHead.rotation;
         }
 
         public override void OnApplicationQuit()

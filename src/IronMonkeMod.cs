@@ -4,15 +4,13 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "2.0.0", "Jx + IronMonke")]
+[assembly: MelonInfo(typeof(IronMonke.IronMonkeMod), "JxIronMonke", "2.0.1", "Jx + IronMonke")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
 {
-    // Uses the same bone paths and Player.Instance pattern as IronMonkeMelon 1.0.3 (buzzbb)
     public class IronMonkeMod : MelonMod
     {
-        // Exact paths from original IronMonke.dll
         private const string LeftHandPath = "rig/body/shoulder.L/upper_arm.L/forearm.L/hand.L";
         private const string RightHandPath = "rig/body/shoulder.R/upper_arm.R/forearm.R/hand.R";
 
@@ -45,7 +43,6 @@ namespace IronMonke
         private static readonly Color GoldHot = new Color(1f, 0.95f, 0.4f);
         private static readonly Color BlastOrange = new Color(1f, 0.45f, 0.05f);
 
-        // Reflection caches for GorillaLocomotion.Player + EasyInputs
         private static PropertyInfo playerInstanceProp;
         private static PropertyInfo playerRbProp;
         private static MethodInfo easySecondary;
@@ -61,7 +58,7 @@ namespace IronMonke
 
         public override void OnLateInitializeMelon()
         {
-            MelonLogger.Msg("JxIronMonke 2.0.0 - IronMonke paths + Y/B thrust");
+            MelonLogger.Msg("JxIronMonke 2.0.1 - IronMonke paths + Y/B thrust");
             MelonLogger.Msg("Thrust: Y (left) / B (right)  |  Trigger = repulsor blast");
             CacheReflection();
         }
@@ -81,7 +78,6 @@ namespace IronMonke
             bool leftTrig = ReadTrigger(true);
             bool rightTrig = ReadTrigger(false);
 
-            // Fallback: palm-down if EasyInputs missing
             if (!leftThrust && !rightThrust && easySecondary == null)
             {
                 leftThrust = PalmDown(leftHand);
@@ -99,7 +95,6 @@ namespace IronMonke
                     body.AddForce(-rightHand.up * ThrustForce, ForceMode.Acceleration);
             }
 
-            // Trigger edge = fire blast (like original)
             if (leftTrig && !leftWasTrigger && leftCd <= 0f && leftHand != null)
             {
                 FireBlast(leftHand);
@@ -164,8 +159,8 @@ namespace IronMonke
                             object rb = playerRbProp.GetValue(inst, null);
                             if (rb is Rigidbody r) return r;
                         }
-                        // Component on player object
-                        if (inst is Component c)
+                        Component c = inst as Component;
+                        if (c != null)
                         {
                             Rigidbody r2 = c.GetComponent<Rigidbody>();
                             if (r2 != null) return r2;
@@ -185,9 +180,6 @@ namespace IronMonke
             {
                 if (easySecondary != null)
                 {
-                    // Original: EasyInputs.GetSecondaryButtonDown((EasyHand)(!left))
-                    // EasyHand enum: Left=0, Right=1 — original uses (!left) so left hand -> Right enum value weirdness;
-                    // Try both common conventions: left=0 and left=1
                     object handEnum = left ? 0 : 1;
                     object result = easySecondary.Invoke(null, new object[] { handEnum });
                     if (result is bool b && b) return true;
@@ -232,7 +224,7 @@ namespace IronMonke
             go.transform.position = hand.position + dir * 0.15f;
             go.transform.localScale = Vector3.one * 0.09f;
             Collider col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            if (col != null) UnityEngine.Object.Destroy(col);
             Renderer r = go.GetComponent<Renderer>();
             if (r != null) r.material.color = BlastOrange;
 
@@ -251,7 +243,7 @@ namespace IronMonke
                 Blast b = blasts[i];
                 if (b.go == null || t >= b.dieAt)
                 {
-                    if (b.go != null) Object.Destroy(b.go);
+                    if (b.go != null) UnityEngine.Object.Destroy(b.go);
                     blasts.RemoveAt(i);
                     continue;
                 }
@@ -273,12 +265,11 @@ namespace IronMonke
             setupTries++;
             if (setupTries > 40)
             {
-                MelonLogger.Warning("Giving up on gloves (will keep trying body only)");
+                MelonLogger.Warning("Giving up on gloves");
                 ready = true;
                 return;
             }
 
-            // Prefer GorillaTagger offline VR rig like original
             Transform rigRoot = null;
             try
             {
@@ -294,10 +285,13 @@ namespace IronMonke
                     object tagger = inst != null ? inst.GetValue(null, null) : null;
                     if (tagger != null)
                     {
-                        FieldInfo rigField = taggerType.GetField("offlineVRRig") ?? taggerType.GetField("offlineVRRig", BindingFlags.Public | BindingFlags.Instance);
+                        FieldInfo rigField = taggerType.GetField("offlineVRRig");
                         PropertyInfo rigProp = taggerType.GetProperty("offlineVRRig");
-                        object rig = rigField != null ? rigField.GetValue(tagger) : (rigProp != null ? rigProp.GetValue(tagger, null) : null);
-                        if (rig is Component rc) rigRoot = rc.transform;
+                        object rig = null;
+                        if (rigField != null) rig = rigField.GetValue(tagger);
+                        else if (rigProp != null) rig = rigProp.GetValue(tagger, null);
+                        Component rc = rig as Component;
+                        if (rc != null) rigRoot = rc.transform;
                     }
                 }
             }
@@ -316,7 +310,6 @@ namespace IronMonke
             leftHand = rigRoot.Find(LeftHandPath);
             rightHand = rigRoot.Find(RightHandPath);
 
-            // Fallback search
             if (leftHand == null) leftHand = Find(rigRoot, "hand.L") ?? Find(rigRoot, "LeftHand");
             if (rightHand == null) rightHand = Find(rigRoot, "hand.R") ?? Find(rigRoot, "RightHand");
 
@@ -354,18 +347,8 @@ namespace IronMonke
         {
             GameObject root = new GameObject(name);
             root.transform.SetParent(hand, false);
-
-            // Offsets inspired by original BuildGlove rootPos values (scaled for procedural cubes)
-            if (left)
-            {
-                root.transform.localPosition = new Vector3(-0.01f, 0.01f, 0f);
-                root.transform.localRotation = Quaternion.identity;
-            }
-            else
-            {
-                root.transform.localPosition = new Vector3(0.01f, 0.01f, 0f);
-                root.transform.localRotation = Quaternion.identity;
-            }
+            root.transform.localPosition = left ? new Vector3(-0.01f, 0.01f, 0f) : new Vector3(0.01f, 0.01f, 0f);
+            root.transform.localRotation = Quaternion.identity;
             root.transform.localScale = Vector3.one;
 
             Part(root.transform, "Palm", PrimitiveType.Cube,
@@ -397,7 +380,7 @@ namespace IronMonke
             go.transform.localRotation = rot;
             go.transform.localScale = scale;
             Collider c = go.GetComponent<Collider>();
-            if (c != null) Object.Destroy(c);
+            if (c != null) UnityEngine.Object.Destroy(c);
             Renderer r = go.GetComponent<Renderer>();
             if (r != null) r.material.color = color;
         }

@@ -3,37 +3,52 @@ using UnityEngine;
 using System;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(IronMonke.JxIronExtras), "JxIronExtras", "1.0.1", "Jx")]
+[assembly: MelonInfo(typeof(IronMonke.JxIronMonke), "JxIronMonke", "3.0.0", "Jx")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
 {
-    // Companion for IronMonke.dll
-    // Gloves/flight/repulsors stay in IronMonke.dll
-    // This only adds chest armor + simple HUD lights
-    public class JxIronExtras : MelonMod
+    // One mod. Gloves stay on IronMonke.dll (or the map's own hands).
+    // Armor + HUD are the Gorilla City scene objects (IronFly_* and IronHUD),
+    // not cubes. They only exist after the Gorilla City map is loaded.
+    public class JxIronMonke : MelonMod
     {
-        private const string ChestPath = "rig/body";
-        private const string HeadPath = "rig/body/head";
+        private static readonly string[] SuitBones = new string[]
+        {
+            "torso",
+            "head",
+            "upper_arm.L",
+            "forearm.L",
+            "upper_arm.R",
+            "forearm.R"
+        };
 
-        private Transform body;
+        private static readonly string[] PlayerPaths = new string[]
+        {
+            "rig/body",
+            "rig/body/head",
+            "rig/body/shoulder.L/upper_arm.L",
+            "rig/body/shoulder.L/upper_arm.L/forearm.L",
+            "rig/body/shoulder.R/upper_arm.R",
+            "rig/body/shoulder.R/upper_arm.R/forearm.R"
+        };
+
+        private Transform rig;
         private Transform head;
-
-        private GameObject armorRoot;
-        private GameObject hudRoot;
+        private Transform[] playerBones;
+        private GameObject[] suitParts;
+        private GameObject face;
+        private GameObject hud;
 
         private bool ready;
-        private int tries;
+        private bool missingLogged;
         private float nextTry;
-
-        private static readonly Color ArmorRed = new Color(0.75f, 0.08f, 0.08f);
-        private static readonly Color ArmorDark = new Color(0.2f, 0.04f, 0.04f);
-        private static readonly Color Gold = new Color(1f, 0.82f, 0.12f);
-        private static readonly Color HudCyan = new Color(0.2f, 1f, 1f);
 
         public override void OnLateInitializeMelon()
         {
-            MelonLogger.Msg("JxIronExtras 1.0.1 - HUD + armor (pair with IronMonke.dll)");
+            MelonLogger.Msg("JxIronMonke 3.0.0");
+            MelonLogger.Msg("Uses Gorilla City IronFly armor + IronHUD. Load that map.");
+            MelonLogger.Msg("Does not build cube armor. Leave IronMonke.dll in Mods for gloves/flight.");
         }
 
         public override void OnUpdate()
@@ -41,42 +56,85 @@ namespace IronMonke
             if (!ready)
             {
                 if (Time.time < nextTry) return;
-                nextTry = Time.time + 1.2f;
+                nextTry = Time.time + 1.5f;
                 TrySetup();
                 return;
             }
 
-            UpdateHUD();
+            StickArmor();
+            StickHud();
         }
 
         private void TrySetup()
         {
-            tries++;
-            if (tries > 50)
+            rig = FindRig();
+            if (rig == null) return;
+
+            GameObject torso = GameObject.Find("IronFly_torso");
+            GameObject hudGo = GameObject.Find("IronHUD");
+            if (torso == null && hudGo == null)
             {
-                MelonLogger.Warning("JxIronExtras: could not find player rig");
-                ready = true;
+                if (!missingLogged)
+                {
+                    missingLogged = true;
+                    MelonLogger.Msg("Gorilla City suit not in this scene yet. Join the Gorilla City map.");
+                }
                 return;
             }
 
-            Transform rig = FindRig();
-            if (rig == null) return;
+            playerBones = new Transform[SuitBones.Length];
+            suitParts = new GameObject[SuitBones.Length];
+            int found = 0;
+            for (int i = 0; i < SuitBones.Length; i++)
+            {
+                playerBones[i] = rig.Find(PlayerPaths[i]);
+                if (playerBones[i] == null) playerBones[i] = FindDeep(rig, SuitBones[i]);
+                suitParts[i] = GameObject.Find("IronFly_" + SuitBones[i]);
+                if (suitParts[i] != null) found++;
+            }
 
-            body = rig.Find(ChestPath);
-            if (body == null) body = FindDeep(rig, "body") ?? rig;
-
-            head = rig.Find(HeadPath);
-            if (head == null) head = FindDeep(rig, "head");
-            if (head == null) head = FindDeep(rig, "Head");
+            face = GameObject.Find("IronFace");
+            hud = hudGo;
+            head = playerBones[1];
             if (head == null && Camera.main != null) head = Camera.main.transform;
 
-            if (body == null) return;
+            for (int i = 0; i < suitParts.Length; i++)
+            {
+                if (suitParts[i] != null) suitParts[i].SetActive(true);
+            }
+            if (face != null) face.SetActive(true);
+            if (hud != null) hud.SetActive(true);
 
-            BuildArmor(body);
-            if (head != null) BuildHUD();
+            ready = found > 0 || hud != null;
+            MelonLogger.Msg("City suit pieces=" + found + " face=" + (face != null) + " hud=" + (hud != null));
+        }
 
-            ready = true;
-            MelonLogger.Msg("JxIronExtras ready. armor=" + (armorRoot != null) + " hud=" + (hudRoot != null));
+        private void StickArmor()
+        {
+            for (int i = 0; i < suitParts.Length; i++)
+            {
+                GameObject part = suitParts[i];
+                Transform bone = playerBones[i];
+                if (part == null || bone == null) continue;
+                // Map script already driving it (near the body). Don't fight it.
+                if ((part.transform.position - bone.position).sqrMagnitude < 4f) continue;
+                part.transform.SetPositionAndRotation(bone.position, bone.rotation);
+            }
+
+            if (face != null && head != null)
+            {
+                if ((face.transform.position - head.position).sqrMagnitude > 4f)
+                    face.transform.SetPositionAndRotation(head.position, head.rotation);
+            }
+        }
+
+        private void StickHud()
+        {
+            if (hud == null || head == null) return;
+            // Same offset the map script uses: head rotation * (0, 0.14, 0.11)
+            Vector3 pos = head.position + head.rotation * new Vector3(0f, 0.14f, 0.11f);
+            if ((hud.transform.position - pos).sqrMagnitude < 0.05f) return;
+            hud.transform.SetPositionAndRotation(pos, head.rotation);
         }
 
         private Transform FindRig()
@@ -92,8 +150,8 @@ namespace IronMonke
                     if (tagger == null) continue;
                     FieldInfo f = t.GetField("offlineVRRig");
                     PropertyInfo p = t.GetProperty("offlineVRRig");
-                    object rig = f != null ? f.GetValue(tagger) : (p != null ? p.GetValue(tagger, null) : null);
-                    Component c = rig as Component;
+                    object rigObj = f != null ? f.GetValue(tagger) : (p != null ? p.GetValue(tagger, null) : null);
+                    Component c = rigObj as Component;
                     if (c != null) return c.transform;
                 }
             }
@@ -107,105 +165,13 @@ namespace IronMonke
 
         private Transform FindDeep(Transform root, string name)
         {
-            if (root.name.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0) return root;
+            if (root.name == name) return root;
             for (int i = 0; i < root.childCount; i++)
             {
                 Transform t = FindDeep(root.GetChild(i), name);
                 if (t != null) return t;
             }
             return null;
-        }
-
-        private void BuildArmor(Transform chest)
-        {
-            armorRoot = new GameObject("JxIronArmor");
-            armorRoot.transform.SetParent(chest, false);
-            armorRoot.transform.localPosition = Vector3.zero;
-            armorRoot.transform.localRotation = Quaternion.identity;
-            armorRoot.transform.localScale = Vector3.one;
-
-            Part(armorRoot.transform, "Chest", PrimitiveType.Cube,
-                new Vector3(0f, 0.12f, 0.08f), Quaternion.identity,
-                new Vector3(0.28f, 0.22f, 0.06f), ArmorRed);
-
-            Part(armorRoot.transform, "Reactor", PrimitiveType.Cylinder,
-                new Vector3(0f, 0.12f, 0.12f), Quaternion.Euler(90f, 0f, 0f),
-                new Vector3(0.08f, 0.015f, 0.08f), Gold);
-
-            Part(armorRoot.transform, "Abs", PrimitiveType.Cube,
-                new Vector3(0f, -0.02f, 0.07f), Quaternion.identity,
-                new Vector3(0.22f, 0.12f, 0.05f), ArmorDark);
-
-            Part(armorRoot.transform, "ShoulderL", PrimitiveType.Cube,
-                new Vector3(-0.2f, 0.22f, 0.02f), Quaternion.identity,
-                new Vector3(0.12f, 0.08f, 0.12f), ArmorRed);
-
-            Part(armorRoot.transform, "ShoulderR", PrimitiveType.Cube,
-                new Vector3(0.2f, 0.22f, 0.02f), Quaternion.identity,
-                new Vector3(0.12f, 0.08f, 0.12f), ArmorRed);
-        }
-
-        private void BuildHUD()
-        {
-            hudRoot = new GameObject("JxIronHUD");
-
-            GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            panel.name = "HUDPanel";
-            panel.transform.SetParent(hudRoot.transform, false);
-            panel.transform.localScale = new Vector3(0.25f, 0.12f, 0.005f);
-            UnityEngine.Object.Destroy(panel.GetComponent<Collider>());
-            Renderer pr = panel.GetComponent<Renderer>();
-            if (pr != null) pr.material.color = new Color(0f, 0f, 0f, 0.55f);
-
-            MakeLight(hudRoot.transform, "L1", new Vector3(-0.08f, 0.03f, -0.01f), HudCyan);
-            MakeLight(hudRoot.transform, "L2", new Vector3(0f, 0.03f, -0.01f), Gold);
-            MakeLight(hudRoot.transform, "L3", new Vector3(0.08f, 0.03f, -0.01f), new Color(0.2f, 1f, 0.3f));
-        }
-
-        private void MakeLight(Transform parent, string name, Vector3 pos, Color c)
-        {
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = name;
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = pos;
-            go.transform.localScale = Vector3.one * 0.025f;
-            UnityEngine.Object.Destroy(go.GetComponent<Collider>());
-            Renderer r = go.GetComponent<Renderer>();
-            if (r != null) r.material.color = c;
-        }
-
-        private void UpdateHUD()
-        {
-            if (hudRoot == null || head == null) return;
-
-            hudRoot.transform.position = head.position + head.forward * 0.55f + head.up * 0.05f;
-            hudRoot.transform.rotation = Quaternion.LookRotation(hudRoot.transform.position - head.position, head.up);
-
-            Transform l2 = hudRoot.transform.Find("L2");
-            if (l2 != null)
-            {
-                Renderer r = l2.GetComponent<Renderer>();
-                if (r != null)
-                {
-                    float pulse = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(Time.time * 3f));
-                    r.material.color = new Color(1f, 0.84f * pulse, 0.12f);
-                }
-            }
-        }
-
-        private void Part(Transform parent, string n, PrimitiveType t,
-            Vector3 pos, Quaternion rot, Vector3 scale, Color color)
-        {
-            GameObject go = GameObject.CreatePrimitive(t);
-            go.name = n;
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = pos;
-            go.transform.localRotation = rot;
-            go.transform.localScale = scale;
-            Collider c = go.GetComponent<Collider>();
-            if (c != null) UnityEngine.Object.Destroy(c);
-            Renderer r = go.GetComponent<Renderer>();
-            if (r != null) r.material.color = color;
         }
     }
 }

@@ -3,15 +3,14 @@ using UnityEngine;
 using System;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(IronMonke.JxIronExtras), "JxIronExtras", "1.0.0", "Jx")]
+[assembly: MelonInfo(typeof(IronMonke.JxIronExtras), "JxIronExtras", "1.0.1", "Jx")]
 [assembly: MelonGame(null, null)]
 
 namespace IronMonke
 {
     // Companion for IronMonke.dll
-    // - Does NOT create gloves (IronMonke.dll already does that)
-    // - Adds floating HUD
-    // - Adds simple chest / arm armor plates
+    // Gloves/flight/repulsors stay in IronMonke.dll
+    // This only adds chest armor + simple HUD lights
     public class JxIronExtras : MelonMod
     {
         private const string ChestPath = "rig/body";
@@ -22,9 +21,6 @@ namespace IronMonke
 
         private GameObject armorRoot;
         private GameObject hudRoot;
-        private Text hudLine1;
-        private Text hudLine2;
-        private Text hudLine3;
 
         private bool ready;
         private int tries;
@@ -37,7 +33,7 @@ namespace IronMonke
 
         public override void OnLateInitializeMelon()
         {
-            MelonLogger.Msg("JxIronExtras 1.0.0 - HUD + armor (use with IronMonke.dll)");
+            MelonLogger.Msg("JxIronExtras 1.0.1 - HUD + armor (pair with IronMonke.dll)");
         }
 
         public override void OnUpdate()
@@ -72,7 +68,7 @@ namespace IronMonke
             head = rig.Find(HeadPath);
             if (head == null) head = FindDeep(rig, "head");
             if (head == null) head = FindDeep(rig, "Head");
-            if (head == null) head = Camera.main != null ? Camera.main.transform : null;
+            if (head == null && Camera.main != null) head = Camera.main.transform;
 
             if (body == null) return;
 
@@ -85,7 +81,6 @@ namespace IronMonke
 
         private Transform FindRig()
         {
-            // Prefer GorillaTagger offlineVRRig like IronMonke
             try
             {
                 foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
@@ -129,22 +124,18 @@ namespace IronMonke
             armorRoot.transform.localRotation = Quaternion.identity;
             armorRoot.transform.localScale = Vector3.one;
 
-            // Chest plate
             Part(armorRoot.transform, "Chest", PrimitiveType.Cube,
                 new Vector3(0f, 0.12f, 0.08f), Quaternion.identity,
                 new Vector3(0.28f, 0.22f, 0.06f), ArmorRed);
 
-            // Arc reactor (gold circle on chest)
             Part(armorRoot.transform, "Reactor", PrimitiveType.Cylinder,
                 new Vector3(0f, 0.12f, 0.12f), Quaternion.Euler(90f, 0f, 0f),
                 new Vector3(0.08f, 0.015f, 0.08f), Gold);
 
-            // Abs plate
             Part(armorRoot.transform, "Abs", PrimitiveType.Cube,
                 new Vector3(0f, -0.02f, 0.07f), Quaternion.identity,
                 new Vector3(0.22f, 0.12f, 0.05f), ArmorDark);
 
-            // Shoulder pads
             Part(armorRoot.transform, "ShoulderL", PrimitiveType.Cube,
                 new Vector3(-0.2f, 0.22f, 0.02f), Quaternion.identity,
                 new Vector3(0.12f, 0.08f, 0.12f), ArmorRed);
@@ -156,31 +147,19 @@ namespace IronMonke
 
         private void BuildHUD()
         {
-            // World-space simple markers parented near head — full Text UI needs UI module
-            // We use small colored quads as status lights + 3D text if possible
             hudRoot = new GameObject("JxIronHUD");
 
-            // Try Unity UI Text if available; otherwise status cubes
-            try
-            {
-                // Status panel behind a translucent cube as backdrop
-                GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                panel.name = "HUDPanel";
-                panel.transform.SetParent(hudRoot.transform, false);
-                panel.transform.localScale = new Vector3(0.25f, 0.12f, 0.005f);
-                UnityEngine.Object.Destroy(panel.GetComponent<Collider>());
-                Renderer pr = panel.GetComponent<Renderer>();
-                if (pr != null) pr.material.color = new Color(0f, 0f, 0f, 0.55f);
+            GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            panel.name = "HUDPanel";
+            panel.transform.SetParent(hudRoot.transform, false);
+            panel.transform.localScale = new Vector3(0.25f, 0.12f, 0.005f);
+            UnityEngine.Object.Destroy(panel.GetComponent<Collider>());
+            Renderer pr = panel.GetComponent<Renderer>();
+            if (pr != null) pr.material.color = new Color(0f, 0f, 0f, 0.55f);
 
-                // Three status lights (SPD / THRUST / ENERGY style)
-                MakeLight(hudRoot.transform, "L1", new Vector3(-0.08f, 0.03f, -0.01f), HudCyan);
-                MakeLight(hudRoot.transform, "L2", new Vector3(0f, 0.03f, -0.01f), Gold);
-                MakeLight(hudRoot.transform, "L3", new Vector3(0.08f, 0.03f, -0.01f), new Color(0.2f, 1f, 0.3f));
-            }
-            catch (Exception ex)
-            {
-                MelonLogger.Warning("HUD build: " + ex.Message);
-            }
+            MakeLight(hudRoot.transform, "L1", new Vector3(-0.08f, 0.03f, -0.01f), HudCyan);
+            MakeLight(hudRoot.transform, "L2", new Vector3(0f, 0.03f, -0.01f), Gold);
+            MakeLight(hudRoot.transform, "L3", new Vector3(0.08f, 0.03f, -0.01f), new Color(0.2f, 1f, 0.3f));
         }
 
         private void MakeLight(Transform parent, string name, Vector3 pos, Color c)
@@ -199,11 +178,9 @@ namespace IronMonke
         {
             if (hudRoot == null || head == null) return;
 
-            // Keep HUD in front of face
             hudRoot.transform.position = head.position + head.forward * 0.55f + head.up * 0.05f;
             hudRoot.transform.rotation = Quaternion.LookRotation(hudRoot.transform.position - head.position, head.up);
 
-            // Pulse gold light while moving fast (simple activity indicator)
             Transform l2 = hudRoot.transform.Find("L2");
             if (l2 != null)
             {
